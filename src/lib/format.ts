@@ -1,17 +1,38 @@
-import { format, formatDistanceToNow, parseISO } from 'date-fns'
+import {
+  format,
+  formatDistanceToNow,
+  isValid,
+  parseISO,
+} from 'date-fns'
 
-export function formatDate(input: string | Date, pattern = 'MMM d, yyyy') {
-  const date = typeof input === 'string' ? parseISO(input) : input
-  return format(date, pattern)
+const EMPTY = '—'
+
+function safeDate(input: string | Date | null | undefined): Date | null {
+  if (input == null || input === '') return null
+  const d = typeof input === 'string' ? parseISO(input) : input
+  return isValid(d) ? d : null
 }
 
-export function formatDateTime(input: string | Date) {
-  return formatDate(input, 'MMM d, yyyy · HH:mm')
+export function formatDate(
+  input: string | Date | null | undefined,
+  pattern = 'MMM d, yyyy',
+): string {
+  const date = safeDate(input)
+  return date ? format(date, pattern) : EMPTY
 }
 
-export function formatRelative(input: string | Date) {
-  const date = typeof input === 'string' ? parseISO(input) : input
-  return formatDistanceToNow(date, { addSuffix: true })
+export function formatDateTime(
+  input: string | Date | null | undefined,
+): string {
+  const date = safeDate(input)
+  return date ? format(date, 'MMM d, yyyy · HH:mm') : EMPTY
+}
+
+export function formatRelative(
+  input: string | Date | null | undefined,
+): string {
+  const date = safeDate(input)
+  return date ? formatDistanceToNow(date, { addSuffix: true }) : EMPTY
 }
 
 export function formatNumber(value: number, options?: Intl.NumberFormatOptions) {
@@ -30,7 +51,7 @@ export function formatPercent(value: number, digits = 1) {
 }
 
 export function formatDuration(seconds: number) {
-  if (!seconds || seconds < 0) return '—'
+  if (!seconds || seconds < 0) return EMPTY
   if (seconds < 60) return `${Math.round(seconds)}s`
   const minutes = Math.floor(seconds / 60)
   const secs = Math.round(seconds % 60)
@@ -41,13 +62,13 @@ export function formatDuration(seconds: number) {
 }
 
 export function formatDistance(meters: number) {
-  if (!meters) return '—'
+  if (!meters) return EMPTY
   if (meters < 1000) return `${Math.round(meters)} m`
   return `${(meters / 1000).toFixed(1)} km`
 }
 
 export function formatFare(egp: number) {
-  if (egp == null) return '—'
+  if (egp == null) return EMPTY
   return `${egp.toFixed(0)} EGP`
 }
 
@@ -56,3 +77,4 @@ export function initialsFromName(first?: string, last?: string) {
   const b = (last?.[0] ?? '').toUpperCase()
   return (a + b) || '?'
 }
+
