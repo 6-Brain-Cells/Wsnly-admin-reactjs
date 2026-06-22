@@ -50,6 +50,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { PageHeader } from '@/components/shared/page-header'
+import { useDocumentTitle } from '@/hooks/use-document-title'
+import { useSetLayoutTitle } from '@/lib/layout-context'
 import { GENDERS, ROLES } from '@/constants/enums'
 import { formatDateTime, initialsFromName } from '@/lib/format'
 
@@ -84,9 +87,8 @@ export default function ProfilePage() {
     },
   })
 
-  useEffect(() => {
-    document.title = 'Profile · Wslny Admin'
-  }, [])
+  useDocumentTitle('Profile')
+  useSetLayoutTitle('Profile')
 
   useEffect(() => {
     if (profile) setUser(profile)
@@ -143,14 +145,10 @@ export default function ProfilePage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-          Profile
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Manage your admin account information and security.
-        </p>
-      </div>
+      <PageHeader
+        title="Profile"
+        description="Manage your admin account information and security."
+      />
 
       <Card>
         <CardContent className="p-5 sm:p-6">
