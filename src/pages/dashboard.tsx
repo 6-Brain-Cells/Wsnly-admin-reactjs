@@ -1,4 +1,4 @@
-import { Star, TrendingUp, Users } from 'lucide-react'
+import { Clock, MapPin, Star, Users } from 'lucide-react'
 import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 
@@ -10,14 +10,18 @@ import {
 import { KPICard } from '@/components/charts/kpi-card'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { PageHeader } from '@/components/shared/page-header'
 import {
   useFeedbackSummary,
   useRouteOverview,
   useUserOverview,
 } from '@/features/analytics/hooks'
+import { useDocumentTitle } from '@/hooks/use-document-title'
+import { useSetLayoutTitle } from '@/lib/layout-context'
 import { ROUTES } from '@/constants/routes'
 import {
   formatCompact,
+  formatDistance,
   formatDuration,
   formatNumber,
   formatPercent,
@@ -28,6 +32,8 @@ export default function DashboardPage() {
   const overview = useRouteOverview()
   const userOverview = useUserOverview()
   const feedbackSummary = useFeedbackSummary()
+  useDocumentTitle('Dashboard')
+  useSetLayoutTitle('Dashboard')
 
   const kpis = useMemo(() => {
     const totals = overview.data?.totals
@@ -45,7 +51,7 @@ export default function DashboardPage() {
       {
         title: 'Route Requests',
         value: totals ? formatCompact(totals.requests) : '—',
-        icon: TrendingUp,
+        icon: MapPin,
         tone: 'default' as const,
         description: totals
           ? `${formatPercent(totals.success_rate_percent)} success`
@@ -55,8 +61,11 @@ export default function DashboardPage() {
       {
         title: 'Avg Duration',
         value: avgs ? formatDuration(avgs.duration_seconds) : '—',
-        icon: TrendingUp,
+        icon: Clock,
         tone: 'default' as const,
+        description: avgs
+          ? `${formatDistance(avgs.distance_meters)} avg`
+          : undefined,
         loading: overview.isLoading,
       },
       {
@@ -92,14 +101,10 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-          Dashboard
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          A live snapshot of platform health, usage, and user satisfaction.
-        </p>
-      </div>
+      <PageHeader
+        title="Dashboard"
+        description="A live snapshot of platform health, usage, and user satisfaction."
+      />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {kpis.map((kpi) => (

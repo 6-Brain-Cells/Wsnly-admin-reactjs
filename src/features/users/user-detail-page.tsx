@@ -50,6 +50,8 @@ import {
 } from '@/components/ui/select'
 import { ErrorState } from '@/components/shared/error-state'
 import { KPICard } from '@/components/charts/kpi-card'
+import { useDocumentTitle } from '@/hooks/use-document-title'
+import { useSetLayoutTitle } from '@/lib/layout-context'
 import { GENDERS, ROLES } from '@/constants/enums'
 import { ROUTES } from '@/constants/routes'
 import { formatDateTime, initialsFromName } from '@/lib/format'
@@ -87,10 +89,14 @@ export default function UserDetailPage() {
 
   useEffect(() => {
     if (user) {
-      document.title = `${user.first_name} ${user.last_name} · Wslny Admin`
       setPendingRole(user.role)
     }
   }, [user])
+
+  useDocumentTitle(user ? `${user.first_name} ${user.last_name}` : undefined)
+  useSetLayoutTitle(
+    user ? `${user.first_name} ${user.last_name}` : null,
+  )
 
   if (isLoading) {
     return (

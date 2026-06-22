@@ -1,15 +1,12 @@
-import { useEffect } from 'react'
 import { ArrowLeft } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 
 import { Button } from '@/components/ui/button'
+import { useDocumentTitle } from '@/hooks/use-document-title'
 
 export default function NotFound() {
   const navigate = useNavigate()
-
-  useEffect(() => {
-    document.title = 'Not Found · Wslny Admin'
-  }, [])
+  useDocumentTitle('Page not found')
 
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center px-4 text-center">

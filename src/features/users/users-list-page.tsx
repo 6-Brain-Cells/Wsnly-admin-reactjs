@@ -1,10 +1,8 @@
 import { Search, X, Users as UsersIcon } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQueryClient } from '@tanstack/react-query'
 
 import { useUsers } from './hooks'
-import { userKeys } from './keys'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -20,6 +18,10 @@ import { Badge } from '@/components/ui/badge'
 import { Pagination } from '@/components/shared/pagination'
 import { EmptyState } from '@/components/shared/empty-state'
 import { ErrorState } from '@/components/shared/error-state'
+import { PageHeader } from '@/components/shared/page-header'
+import { useDebounce } from '@/hooks/use-debounce'
+import { useDocumentTitle } from '@/hooks/use-document-title'
+import { useSetLayoutTitle } from '@/lib/layout-context'
 import { ROLES } from '@/constants/enums'
 import { ROUTES } from '@/constants/routes'
 import { formatDate, initialsFromName } from '@/lib/format'
@@ -38,16 +40,16 @@ const ROLE_OPTIONS = [
 
 export default function UsersListPage() {
   const navigate = useNavigate()
-  const qc = useQueryClient()
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
-  const [search, setSearch] = useState('')
+  const [searchInput, setSearchInput] = useState('')
   const [roleFilter, setRoleFilter] = useState<string>('all')
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  const debouncedSearch = useDebounce(searchInput, 300)
 
   const queryParams = useMemo(
     () => ({
-      search: search || undefined,
+      search: debouncedSearch || undefined,
       role: roleFilter !== 'all' ? roleFilter : undefined,
       is_active:
         statusFilter === 'all'
@@ -58,51 +60,44 @@ export default function UsersListPage() {
       limit: pageSize,
       offset: (page - 1) * pageSize,
     }),
-    [search, roleFilter, statusFilter, pageSize, page],
+    [debouncedSearch, roleFilter, statusFilter, pageSize, page],
   )
 
-  const { data, isLoading, isError, error, refetch } = useUsers(queryParams)
-
-  useEffect(() => {
-    document.title = 'Users · Wslny Admin'
-  }, [])
+  const { data, isLoading, isError, error, refetch } =
+    useUsers(queryParams)
 
   useEffect(() => {
     setPage(1)
-  }, [search, roleFilter, statusFilter])
+  }, [debouncedSearch, roleFilter, statusFilter])
 
-  useEffect(() => {
-    qc.invalidateQueries({ queryKey: userKeys.lists() })
-  }, [qc])
+  useDocumentTitle('Users')
+  useSetLayoutTitle('Users')
 
   const users = data ?? []
+  const hasActiveFilters =
+    Boolean(searchInput) || roleFilter !== 'all' || statusFilter !== 'all'
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-            Users
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Search, filter, and manage every account on the platform.
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="Users"
+        description="Search, filter, and manage every account on the platform."
+      />
 
       <Card className="p-4 sm:p-5">
         <div className="flex flex-col gap-3 md:flex-row md:items-center">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
               placeholder="Search by name, email, phone…"
               className="pl-9 pr-9"
+              aria-label="Search users"
             />
-            {search && (
+            {searchInput && (
               <button
-                onClick={() => setSearch('')}
+                onClick={() => setSearchInput('')}
                 className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:text-foreground"
                 aria-label="Clear search"
               >
@@ -165,7 +160,11 @@ export default function UsersListPage() {
           <EmptyState
             icon={UsersIcon}
             title="No users found"
-            description="Try adjusting your filters or search query."
+            description={
+              hasActiveFilters
+                ? 'Try adjusting your filters or clearing the search.'
+                : 'No users have signed up yet.'
+            }
           />
         ) : (
           <>
