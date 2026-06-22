@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
+import { api } from '@/lib/api/client'
 import { authApi } from './api'
 import { useAuthStore } from './store'
 import type {
@@ -21,23 +22,50 @@ export function useProfile(enabled = true) {
   })
 }
 
+/**
+ * Use an explicit bearer token to fetch the full profile. We do this BEFORE
+ * committing anything to the auth store so there's never an intermediate
+ * "isAuthenticated=true but role=undefined" window — that window used to
+ * trigger the LoginPage's stale-state recovery effect (which wiped the
+ * just-stored tokens) and leave us logged in but tokenless. (See plan §6.)
+ */
+export async function fetchProfileWithToken(token: string): Promise<User> {
+  const { data } = await api.get<User>('/api/v1/auth/profile', {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  return data
+}
+
+/**
+ * Exchange credentials for tokens, fetch the full profile with the new
+ * token, then commit both to the store atomically. If any step fails the
+ * store stays untouched so the user remains logged out.
+ *
+ * Exported for unit-testing the atomicity guarantee without needing a
+ * React renderer.
+ */
+export async function performLogin(payload: LoginPayload | { idToken: string }) {
+  const auth =
+    'email' in payload
+      ? await authApi.login(payload as LoginPayload)
+      : await authApi.googleLogin((payload as { idToken: string }).idToken)
+
+  const profile = await fetchProfileWithToken(auth.token)
+  const user: User = { ...auth.user, ...profile }
+
+  useAuthStore.getState().setAuth(auth.token, auth.refresh_token, user)
+  return { auth, user }
+}
+
 export function useLogin() {
-  const setAuth = useAuthStore((s) => s.setAuth)
   return useMutation({
-    mutationFn: (payload: LoginPayload) => authApi.login(payload),
-    onSuccess: (data) => {
-      setAuth(data.token, data.refresh_token, data.user)
-    },
+    mutationFn: (payload: LoginPayload) => performLogin(payload),
   })
 }
 
 export function useGoogleLogin() {
-  const setAuth = useAuthStore((s) => s.setAuth)
   return useMutation({
-    mutationFn: (idToken: string) => authApi.googleLogin(idToken),
-    onSuccess: (data) => {
-      setAuth(data.token, data.refresh_token, data.user)
-    },
+    mutationFn: (idToken: string) => performLogin({ idToken }),
   })
 }
 
