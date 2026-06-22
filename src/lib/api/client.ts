@@ -2,6 +2,7 @@ import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios'
 
 import { config } from '@/config/env'
 import { useAuthStore } from '@/features/auth/store'
+import { isAdminEndpoint } from './admin-allowlist'
 
 interface FailedQueueItem {
   resolve: (token: string) => void
@@ -25,13 +26,41 @@ export const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 })
 
-api.interceptors.request.use((config) => {
+// Attach the JWT to every outbound request.
+// Uses AxiosHeaders.set() rather than direct property assignment, which
+// is the canonical axios v1 way and avoids cases where an interceptor
+// runs before AxiosHeaders has fully initialised the proxy.
+api.interceptors.request.use((requestConfig) => {
   const token = useAuthStore.getState().accessToken
   if (token) {
-    config.headers.Authorization = `Bearer ${token}`
+    requestConfig.headers.set('Authorization', `Bearer ${token}`)
   }
-  return config
+  return requestConfig
 })
+
+/**
+ * Dev-only guard: the admin dashboard MUST NOT call end-user endpoints
+ * owned by the Flutter mobile client. See `.speckit/plan.md` §0.2 and risk R11.
+ *
+ * We run this as a request interceptor (NOT an adapter wrapper) because
+ * axios's `dispatchRequest` resolves the adapter internally and does not
+ * reliably honour `instance.defaults.adapter` for all request shapes —
+ * using the interceptor runs reliably and rejects the promise cleanly,
+ * which `toApiError` then surfaces as a regular API error in `onError`.
+ */
+if (import.meta.env.DEV) {
+  api.interceptors.request.use((requestConfig) => {
+    const url = requestConfig.url ?? ''
+    if (!isAdminEndpoint(url)) {
+      const message = `[admin-allowlist] Forbidden endpoint for admin dashboard: ${url}`
+      if (import.meta.env.DEV) {
+        console.error(message)
+      }
+      return Promise.reject(new Error(message))
+    }
+    return requestConfig
+  })
+}
 
 api.interceptors.response.use(
   (response) => response,
@@ -106,6 +135,8 @@ export function toApiError(error: unknown): ApiError {
     }
   }
   if (error instanceof Error) {
+    // Non-Axios errors (network failures, our interceptor guards, etc.)
+    // should still surface as a usable message rather than a stack trace.
     return { message: error.message, status: 0 }
   }
   return { message: 'Unknown error', status: 0 }
