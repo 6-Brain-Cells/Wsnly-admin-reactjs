@@ -1,5 +1,4 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { useEffect } from 'react'
 import { Toaster } from 'react-hot-toast'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 
@@ -18,16 +17,9 @@ import { ErrorBoundary } from '@/components/shared/error-boundary'
 import DashboardPage from '@/pages/dashboard'
 import NotFound from '@/pages/not-found'
 import { queryClient } from '@/lib/api/query-client'
-import { config } from '@/config/env'
+import { LayoutProvider } from '@/lib/layout-context'
 import { ROUTES } from '@/constants/routes'
 import { TooltipProvider } from '@/components/ui/tooltip'
-
-function TitleManager() {
-  useEffect(() => {
-    document.title = config.appName
-  }, [])
-  return null
-}
 
 export default function App() {
   return (
@@ -35,47 +27,48 @@ export default function App() {
       <QueryClientProvider client={queryClient}>
         <TooltipProvider delayDuration={150}>
           <BrowserRouter>
-            <TitleManager />
-            <Routes>
-              <Route path={ROUTES.login} element={<LoginPage />} />
+            <LayoutProvider>
+              <Routes>
+                <Route path={ROUTES.login} element={<LoginPage />} />
 
-              <Route
-                element={
-                  <RequireAuth>
-                    <RequireAdmin>
-                      <AdminLayout />
-                    </RequireAdmin>
-                  </RequireAuth>
-                }
-              >
-                <Route index element={<DashboardPage />} />
-                <Route path={ROUTES.users} element={<UsersListPage />} />
-                <Route path="/users/:id" element={<UserDetailPage />} />
                 <Route
-                  path={ROUTES.routeAnalytics}
-                  element={<RouteAnalyticsPage />}
-                />
-                <Route
-                  path={ROUTES.userAnalytics}
-                  element={<UserAnalyticsPage />}
-                />
-                <Route
-                  path={ROUTES.feedbackAnalytics}
-                  element={<FeedbackAnalyticsPage />}
-                />
-                <Route
-                  path={ROUTES.queryBuilder}
-                  element={<QueryBuilderPage />}
-                />
-                <Route
-                  path={ROUTES.systemHealth}
-                  element={<SystemHealthPage />}
-                />
-                <Route path={ROUTES.profile} element={<ProfilePage />} />
-              </Route>
+                  element={
+                    <RequireAuth>
+                      <RequireAdmin>
+                        <AdminLayout />
+                      </RequireAdmin>
+                    </RequireAuth>
+                  }
+                >
+                  <Route index element={<DashboardPage />} />
+                  <Route path={ROUTES.users} element={<UsersListPage />} />
+                  <Route path="/users/:id" element={<UserDetailPage />} />
+                  <Route
+                    path={ROUTES.routeAnalytics}
+                    element={<RouteAnalyticsPage />}
+                  />
+                  <Route
+                    path={ROUTES.userAnalytics}
+                    element={<UserAnalyticsPage />}
+                  />
+                  <Route
+                    path={ROUTES.feedbackAnalytics}
+                    element={<FeedbackAnalyticsPage />}
+                  />
+                  <Route
+                    path={ROUTES.queryBuilder}
+                    element={<QueryBuilderPage />}
+                  />
+                  <Route
+                    path={ROUTES.systemHealth}
+                    element={<SystemHealthPage />}
+                  />
+                  <Route path={ROUTES.profile} element={<ProfilePage />} />
+                </Route>
 
-              <Route path="*" element={<NotFound />} />
-            </Routes>
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </LayoutProvider>
             <Toaster
               position="top-right"
               toastOptions={{

@@ -1,4 +1,4 @@
-import { Bell, LogOut, Menu, Search, User } from 'lucide-react'
+import { Bell, LogOut, Menu, User } from 'lucide-react'
 import { useState } from 'react'
 
 import { MobileDrawer } from './mobile-drawer'
@@ -14,14 +14,16 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { initialsFromName } from '@/lib/format'
+import { useLayoutTitle } from '@/lib/layout-context'
 import { useNavigate } from 'react-router-dom'
 import { ROUTES } from '@/constants/routes'
 
-export function Topbar({ title }: { title?: string }) {
+export function Topbar() {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const user = useAuthStore((s) => s.user)
   const clear = useAuthStore((s) => s.clear)
   const navigate = useNavigate()
+  const { title } = useLayoutTitle()
 
   return (
     <>
@@ -42,17 +44,6 @@ export function Topbar({ title }: { title?: string }) {
               {title}
             </h1>
           )}
-        </div>
-
-        <div className="hidden items-center gap-1 md:flex">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <input
-              type="search"
-              placeholder="Search…"
-              className="h-9 w-48 rounded-md border border-input bg-background pl-9 pr-3 text-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 lg:w-64"
-            />
-          </div>
         </div>
 
         <Button
