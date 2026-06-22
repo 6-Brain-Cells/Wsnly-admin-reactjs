@@ -117,11 +117,14 @@ export interface FeedbackSummary {
   rating_distribution: RatingDistribution
 }
 
+export type HealthStatus = 'healthy' | 'unhealthy'
+
 export interface SystemHealth {
-  status: 'healthy' | 'degraded'
+  status: HealthStatus
+  checkedAt: string
   checks: {
-    database: 'healthy' | 'unhealthy'
-    ai_service: 'healthy' | 'unhealthy'
-    routing_engine: 'healthy' | 'unhealthy'
+    database: HealthStatus
+    ai_service: HealthStatus
+    routing_engine: HealthStatus
   }
 }

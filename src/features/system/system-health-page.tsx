@@ -1,12 +1,14 @@
 import { Activity, CheckCircle2, Cpu, Database, Loader2, RefreshCw, ShieldAlert, XCircle } from 'lucide-react'
-import { useEffect } from 'react'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { ErrorState } from '@/components/shared/error-state'
+import { PageHeader } from '@/components/shared/page-header'
 import { useSystemHealth } from './hooks'
+import { useDocumentTitle } from '@/hooks/use-document-title'
+import { useSetLayoutTitle } from '@/lib/layout-context'
 import { formatRelative } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
@@ -54,43 +56,38 @@ function StatusPill({ status, label, loading }: { status?: Status; label: string
 export default function SystemHealthPage() {
   const health = useSystemHealth(30_000)
 
-  useEffect(() => {
-    document.title = 'System Health · Wslny Admin'
-  }, [])
+  useDocumentTitle('System Health')
+  useSetLayoutTitle('System Health')
 
   const c = health.data?.checks
-  const loading = health.isLoading
+  const loading = health.isLoading || health.isPending
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-            System Health
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Live status of every platform dependency. Auto-refreshes every 30s.
-          </p>
-        </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          {health.dataUpdatedAt && (
-            <span>
-              Last checked {formatRelative(new Date(health.dataUpdatedAt))}
-            </span>
-          )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => health.refetch()}
-            disabled={health.isFetching}
-          >
-            <RefreshCw
-              className={cn('h-4 w-4', health.isFetching && 'animate-spin')}
-            />
-            Refresh
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title="System Health"
+        description="Live status of every platform dependency. Auto-refreshes every 30s."
+        action={
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            {health.dataUpdatedAt && (
+              <span>
+                Last checked {formatRelative(new Date(health.dataUpdatedAt))}
+              </span>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => health.refetch()}
+              disabled={health.isFetching}
+            >
+              <RefreshCw
+                className={cn('h-4 w-4', health.isFetching && 'animate-spin')}
+              />
+              Refresh
+            </Button>
+          </div>
+        }
+      />
 
       {health.isError ? (
         <ErrorState
