@@ -1,5 +1,5 @@
-import { Star } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { MessageSquare, Star } from 'lucide-react'
+import { useMemo, useState } from 'react'
 
 import { KPICard } from '@/components/charts/kpi-card'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -20,8 +20,10 @@ import {
 import { Pagination } from '@/components/shared/pagination'
 import { EmptyState } from '@/components/shared/empty-state'
 import { ErrorState } from '@/components/shared/error-state'
+import { PageHeader } from '@/components/shared/page-header'
 import { useFeedback, useFeedbackSummary } from './hooks'
-import { MessageSquare } from 'lucide-react'
+import { useDocumentTitle } from '@/hooks/use-document-title'
+import { useSetLayoutTitle } from '@/lib/layout-context'
 import { formatDateTime, formatNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
@@ -255,20 +257,15 @@ function ListTab() {
 }
 
 export default function FeedbackAnalyticsPage() {
-  useEffect(() => {
-    document.title = 'Feedback · Wslny Admin'
-  }, [])
+  useDocumentTitle('Feedback')
+  useSetLayoutTitle('Feedback')
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-          Feedback
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          What users are saying about their routing experience.
-        </p>
-      </div>
+      <PageHeader
+        title="Feedback"
+        description="What users are saying about their routing experience."
+      />
 
       <Tabs defaultValue="summary" className="space-y-4">
         <div className="overflow-x-auto">

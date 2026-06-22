@@ -40,12 +40,15 @@ import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { ErrorState } from '@/components/shared/error-state'
 import { EmptyState } from '@/components/shared/empty-state'
+import { PageHeader } from '@/components/shared/page-header'
 import {
   useFilterStats,
   useRouteOverview,
   useTopRoutes,
   useUnresolved,
 } from '@/features/analytics/hooks'
+import { useDocumentTitle } from '@/hooks/use-document-title'
+import { useSetLayoutTitle } from '@/lib/layout-context'
 import { ROUTE_FILTER_LABELS, type RouteFilter } from '@/constants/enums'
 import {
   formatCompact,
@@ -356,7 +359,7 @@ function TopRoutesTab() {
 
   const chartData = useMemo(
     () =>
-      top.data?.top_routes.map((r) => ({
+      top.data?.top_routes?.map((r) => ({
         name: `${r.origin_name} → ${r.destination_name}`,
         value: r.requests,
       })) ?? [],
@@ -409,7 +412,7 @@ function TopRoutesTab() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                      {top.data.top_routes.map((r, i) => (
+                      {top.data?.top_routes?.map((r, i) => (
                         <tr
                           key={`${r.origin_name}-${r.destination_name}-${i}`}
                         >
@@ -450,7 +453,7 @@ function FiltersTab() {
 
   const chartData = useMemo(
     () =>
-      filters.data?.filters.map((f) => ({
+      filters.data?.filters?.map((f) => ({
         name: f.name,
         value: f.requests,
       })) ?? [],
@@ -480,7 +483,7 @@ function FiltersTab() {
               ? Array.from({ length: 6 }).map((_, i) => (
                   <Skeleton key={i} className="h-32" />
                 ))
-              : filters.data?.filters.map((f, i) => (
+              : filters.data?.filters?.map((f, i) => (
                   <Card key={`${f.name}-${i}`}>
                     <CardContent className="p-5">
                       <div className="flex items-start justify-between">
@@ -556,7 +559,7 @@ function UnresolvedTab() {
                 />
               ) : (
                 <div className="space-y-3">
-                  {unresolved.data.unresolved_reasons.map((r, i) => (
+                  {unresolved.data?.unresolved_reasons?.map((r, i) => (
                     <div
                       key={`${r.unresolved_reason}-${i}`}
                       className="flex items-center justify-between rounded-md border border-border p-3"
@@ -627,7 +630,7 @@ function UnresolvedTab() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                      {unresolved.data.top_unresolved_queries.map((q, i) => (
+                      {unresolved.data?.top_unresolved_queries?.map((q, i) => (
                         <tr key={i}>
                           <td className="px-6 py-3 font-medium">
                             {q.input_text || '—'}
@@ -658,16 +661,15 @@ export default function RouteAnalyticsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const initialTab = searchParams.get('tab') ?? 'overview'
 
+  useDocumentTitle('Route Analytics')
+  useSetLayoutTitle('Route Analytics')
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-          Route Analytics
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Understand how the routing engine is performing across Greater Cairo.
-        </p>
-      </div>
+      <PageHeader
+        title="Route Analytics"
+        description="Understand how the routing engine is performing across Greater Cairo."
+      />
 
       <Tabs
         value={initialTab}

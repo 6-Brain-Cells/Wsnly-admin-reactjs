@@ -1,5 +1,4 @@
-import { UserCheck, UserMinus, UserPlus, Users } from 'lucide-react'
-import { useEffect } from 'react'
+import { UserCheck, UserCog, UserMinus, UserPlus, Users } from 'lucide-react'
 
 import { ChartCard, DailyLineChart } from '@/components/charts/charts'
 import { KPICard } from '@/components/charts/kpi-card'
@@ -8,16 +7,17 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { ErrorState } from '@/components/shared/error-state'
 import { EmptyState } from '@/components/shared/empty-state'
+import { PageHeader } from '@/components/shared/page-header'
 import { useUserOverview } from './hooks'
+import { useDocumentTitle } from '@/hooks/use-document-title'
+import { useSetLayoutTitle } from '@/lib/layout-context'
 import { formatNumber } from '@/lib/format'
-import { UserCog } from 'lucide-react'
 
 export default function UserAnalyticsPage() {
   const overview = useUserOverview()
 
-  useEffect(() => {
-    document.title = 'User Analytics · Wslny Admin'
-  }, [])
+  useDocumentTitle('User Analytics')
+  useSetLayoutTitle('User Analytics')
 
   const totals = overview.data?.totals
   const kpis = [
@@ -52,14 +52,10 @@ export default function UserAnalyticsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-          User Analytics
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Track registration growth, engagement, and your most active users.
-        </p>
-      </div>
+      <PageHeader
+        title="User Analytics"
+        description="Track registration growth, engagement, and your most active users."
+      />
 
       {overview.isError ? (
         <ErrorState
@@ -149,7 +145,7 @@ export default function UserAnalyticsPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border">
-                        {overview.data.top_users_by_routes.map((u, i) => (
+                        {overview.data?.top_users_by_routes?.map((u, i) => (
                           <tr key={`${u.user__email}-${i}`}>
                             <td className="px-6 py-3 text-muted-foreground">
                               {i + 1}
