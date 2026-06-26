@@ -250,6 +250,23 @@ class Semaphore {
   }
 }
 
+// Token-bucket rate limiter. Defaults to 28 req/min so we stay safely
+// under the backend's 30 req/min anonymous limit (see `.speckit/plan.md` §0:
+// "30 req/min anonymous, 60 req/min authenticated"). `wait()` blocks the
+// caller just long enough to keep the global throughput at the limit.
+class RateLimiter {
+  constructor(perMinute) {
+    this.intervalMs = 60_000 / perMinute
+    this.last = 0
+  }
+  async wait() {
+    const now = Date.now()
+    const wait = this.last + this.intervalMs - now
+    if (wait > 0) await sleep(wait)
+    this.last = Date.now()
+  }
+}
+
 async function withSemaphore(sem, fn) {
   await sem.acquire()
   try {
@@ -313,7 +330,19 @@ async function createUser(index, total) {
   }
 
   const t0 = performance.now()
-  const res = await api('POST', '/api/v1/auth/register', { body: payload })
+  // Retry up to 3 times on 429 (rate limited). The rate limiter should
+  // already keep us under the limit, but this catches bursts from other
+  // concurrent runs on the same host.
+  let res = null
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    res = await api('POST', '/api/v1/auth/register', { body: payload })
+    if (res.status !== 429) break
+    const backoff = 5000 * attempt // 5s, 10s, 15s
+    console.log(
+      `  [${String(index).padStart(3, '0')}/${total}] ⏳ 429, backing off ${backoff} ms`,
+    )
+    await sleep(backoff)
+  }
   const ms = Math.round(performance.now() - t0)
 
   if (res.ok) {
@@ -364,12 +393,20 @@ async function createUser(index, total) {
 
 async function createAllUsers() {
   console.log(`\n── Phase 1: Create ${USER_COUNT} users ──`)
-  const sem = new Semaphore(10)
-  const results = await Promise.all(
-    Array.from({ length: USER_COUNT }, (_, i) =>
-      withSemaphore(sem, () => createUser(i + 1, USER_COUNT)),
-    ),
-  )
+  // Anonymous registration is throttled to 30 req/min per IP (see
+  // .speckit/plan.md §0). We run user creation sequentially with a
+  // 28 req/min rate limiter so we never trigger HTTP 429.
+  const sem = new Semaphore(1)
+  const rate = new RateLimiter(Number(process.env.SEED_REGISTER_RPM ?? 28))
+  const results = []
+  for (let i = 1; i <= USER_COUNT; i++) {
+    // eslint-disable-next-line no-await-in-loop
+    const u = await withSemaphore(sem, async () => {
+      await rate.wait()
+      return createUser(i, USER_COUNT)
+    })
+    results.push(u)
+  }
   const users = results.filter(Boolean)
   console.log(`  → ${users.length}/${USER_COUNT} users ready\n`)
   return users
