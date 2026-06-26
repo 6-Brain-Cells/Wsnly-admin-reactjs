@@ -22,6 +22,10 @@
  *   SEED_CONCURRENCY      default: 15   (max parallel requests)
  *   SEED_DRY_RUN          default: 0    (1 = log, don't post)
  *   SEED_VERBOSE          default: 0    (1 = per-request logs)
+ *   SEED_SKIP_USERS       default: 0    (1 = log in to existing users instead of registering new ones)
+ *   SEED_LOGIN_PATTERNS   default: bulk2.1782464649,bulk.1782464454,seed.user,demotest.1782464138
+ *                                       (comma-separated email prefixes; {n} is 3-digit index)
+ *   SEED_REGISTER_RPM     default: 28   (per-minute cap for /api/v1/auth/register; stay under 30)
  *
  * Requirements: Node 18+ (uses global fetch).
  * No external dependencies — the script reuses only Node built-ins.
@@ -280,7 +284,7 @@ async function withSemaphore(sem, fn) {
 // HTTP helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function api(method, path, { token, body, query } = {}) {
+async function api(method, path, { token, body, query, maxRetries = 3 } = {}) {
   let url = `${API_BASE}${path}`
   if (query) {
     const qs = new URLSearchParams(
@@ -291,15 +295,34 @@ async function api(method, path, { token, body, query } = {}) {
   const headers = { 'Content-Type': 'application/json' }
   if (token) headers.Authorization = `Bearer ${token}`
   if (DRY_RUN) return { ok: true, status: 200, data: { dry_run: true } }
-  const res = await fetch(url, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  })
-  let data
-  const ct = res.headers.get('content-type') ?? ''
-  data = ct.includes('application/json') ? await res.json() : await res.text()
-  return { ok: res.ok, status: res.status, data }
+
+  // Retry on network errors and 429/5xx. The Azure Container App occasionally
+  // drops connections during burst traffic.
+  let lastErr
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const res = await fetch(url, {
+        method,
+        headers,
+        body: body ? JSON.stringify(body) : undefined,
+      })
+      let data
+      const ct = res.headers.get('content-type') ?? ''
+      data = ct.includes('application/json') ? await res.json() : await res.text()
+      if (res.status === 429 || res.status >= 500) {
+        const backoff = 1000 * attempt * attempt // 1s, 4s, 9s
+        await sleep(backoff)
+        continue
+      }
+      return { ok: res.ok, status: res.status, data }
+    } catch (err) {
+      lastErr = err
+      const backoff = 1000 * attempt * attempt
+      await sleep(backoff)
+    }
+  }
+  // Out of retries — surface the last network error so callers can log it.
+  throw lastErr ?? new Error(`${method} ${path} failed after ${maxRetries} retries`)
 }
 
 function logVerbose(...args) {
@@ -413,6 +436,76 @@ async function createAllUsers() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Phase 1b (alternative) — log in to existing users instead of creating new
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// When SEED_SKIP_USERS=1 is set we skip the slow anonymous registration step
+// and instead try to log in to a set of known email patterns. Useful for
+// "continue" runs after the user phase was already done, or when you only
+// want to top up routes/feedback/locations.
+//
+// Patterns default to the ones our previous runs have produced. Override
+// with SEED_LOGIN_PATTERNS=pat1,pat2 (each pattern uses {n} as the index
+// placeholder; default placeholder is a 3-digit zero-padded number).
+
+const DEFAULT_LOGIN_PATTERNS = [
+  'bulk2.1782464649',     // most recent bulk run (this script's default)
+  'bulk.1782464454',      // earlier failed bulk run
+  'seed.user',            // very first seed default
+  'demotest.1782464138',  // test run
+]
+
+async function loginExistingUser(email) {
+  const res = await api('POST', '/api/v1/auth/login', {
+    body: { email, password: DEMO_PASSWORD },
+  })
+  if (!res.ok) return null
+  return {
+    email,
+    first_name: res.data?.user?.first_name ?? email.split('@')[0],
+    last_name: res.data?.user?.last_name ?? '',
+    token: res.data.token,
+    refresh_token: res.data.refresh_token,
+    active: true,
+    reused: true,
+  }
+}
+
+async function loadExistingUsers() {
+  console.log(`\n── Phase 1: Log in to existing users (SEED_SKIP_USERS=1) ──`)
+  const patterns = (process.env.SEED_LOGIN_PATTERNS ??
+    DEFAULT_LOGIN_PATTERNS.join(',')).split(',').map((p) => p.trim()).filter(Boolean)
+  const sem = new Semaphore(5) // login is 60 req/min authenticated, 5x is fine
+  const wanted = Number(process.env.SEED_USER_COUNT ?? 800)
+  // Allow a few consecutive misses before bailing on a pattern (handles
+  // real gaps AND transient 4xx errors during a 429 burst).
+  const MAX_MISSES_PER_PATTERN = 25
+  const users = []
+  outer: for (const pattern of patterns) {
+    let consecutiveMisses = 0
+    for (let i = 1; i <= 2000; i++) {
+      if (users.length >= wanted) break outer
+      // eslint-disable-next-line no-await-in-loop
+      const u = await withSemaphore(sem, () =>
+        loginExistingUser(`${pattern}.${String(i).padStart(3, '0')}@wslny-demo.com`),
+      )
+      if (!u) {
+        consecutiveMisses++
+        if (consecutiveMisses >= MAX_MISSES_PER_PATTERN) break
+        continue
+      }
+      consecutiveMisses = 0
+      users.push(u)
+      if (users.length % 50 === 0 || users.length === wanted) {
+        console.log(`  ${users.length}/${wanted} users loaded…`)
+      }
+    }
+  }
+  console.log(`  → ${users.length} users ready\n`)
+  return users
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Phase 2 — Routing requests
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -465,6 +558,7 @@ async function generateRoutes(users) {
   let made = 0
   let succeeded = 0
   let failed = 0
+  let networkFails = 0
   const successful = [] // {user, request_id, source, filter, ts}
   const startedAt = performance.now()
   const totalToMake = perUser.reduce((a, b) => a + b, 0)
@@ -487,7 +581,20 @@ async function generateRoutes(users) {
   await Promise.all(
     tasks.map((t) =>
       withSemaphore(sem, async () => {
-        const r = await planRoute(t.user, t.isText)
+        let r
+        try {
+          r = await planRoute(t.user, t.isText)
+        } catch (err) {
+          // Network / fetch error after all retries — count as a hard fail,
+          // log once, and keep going so one bad request doesn't kill the run.
+          networkFails++
+          if (networkFails <= 5 || networkFails % 100 === 0) {
+            console.log(`    ⚠ network error: ${err.message ?? err}`)
+          }
+          made++
+          failed++
+          return
+        }
         made++
         if (r.ok) {
           succeeded++
@@ -508,7 +615,7 @@ async function generateRoutes(users) {
           const rate = made / elapsed
           const eta = (totalToMake - made) / Math.max(rate, 0.01)
           console.log(
-            `    ${String(made).padStart(5)}/${totalToMake}  ok=${succeeded}  fail=${failed}  ${rate.toFixed(1)} req/s  ETA ${eta.toFixed(0)}s`,
+            `    ${String(made).padStart(5)}/${totalToMake}  ok=${succeeded}  fail=${failed}  net=${networkFails}  ${rate.toFixed(1)} req/s  ETA ${eta.toFixed(0)}s`,
           )
         }
       }),
@@ -517,9 +624,9 @@ async function generateRoutes(users) {
 
   const totalSec = (performance.now() - startedAt) / 1000
   console.log(
-    `  → ${made} requests in ${totalSec.toFixed(0)}s (${(made / totalSec).toFixed(1)} req/s). ok=${succeeded}, fail=${failed}\n`,
+    `  → ${made} requests in ${totalSec.toFixed(0)}s (${(made / totalSec).toFixed(1)} req/s). ok=${succeeded}, fail=${failed}, net=${networkFails}\n`,
   )
-  return { successful, succeeded, failed }
+  return { successful, succeeded, failed, networkFails }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -663,7 +770,9 @@ async function main() {
   console.log('────────────────────────────────────────────────────────────')
 
   const t0 = performance.now()
-  const users = await createAllUsers()
+  const users = process.env.SEED_SKIP_USERS === '1'
+    ? await loadExistingUsers()
+    : await createAllUsers()
   if (users.length === 0) {
     console.error('No users created — aborting.')
     process.exit(1)
