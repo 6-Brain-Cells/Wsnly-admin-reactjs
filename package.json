@@ -10,7 +10,9 @@
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "seed": "node scripts/seed.mjs",
+    "seed:dry": "SEED_DRY_RUN=1 node scripts/seed.mjs"
   },
   "dependencies": {
     "@fontsource/inter": "^5.1.0",
